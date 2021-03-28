@@ -10,6 +10,7 @@ using Newtonsoft.Json;
 using Noggog;
 using System.IO;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace KnowYourEnemyMutagen
 {
@@ -19,7 +20,7 @@ namespace KnowYourEnemyMutagen
         {
             return SynthesisPipeline.Instance
                 .AddPatch<ISkyrimMod, ISkyrimModGetter>(RunPatch)
-                .SetTypicalOpen(GameRelease.SkyrimSE, "KnowYourEnemy_patcher.esp")
+                .SetTypicalOpen(GameRelease.SkyrimSE, "know_your_enemy_patcher.esp")
                 .Run(args);
         }
 
@@ -73,8 +74,10 @@ namespace KnowYourEnemyMutagen
             return jObject.ContainsKey(key) ? jObject[key]!.Select(x => (string?)x).Where(x => x != null).Select(x => x!).ToList() : new List<string>();
         }
 
-        private static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        private static async void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
             if (!state.LoadOrder.ContainsKey(KnowYourEnemy.ModKey))
                 throw new Exception("ERROR: Know Your Enemy not detected in load order. You need to install KYE prior to running this patcher!");
 
@@ -93,9 +96,8 @@ namespace KnowYourEnemyMutagen
                 }
             }
             if (failed)
-            {
                 throw new Exception($"Missing required files in {state.ExtraSettingsDataPath}! Make sure to copy all files over when installing the patcher, and don't run it from within an archive.");
-            }
+
             // Retrieve all the perks that are going to be applied to NPCs in part 5
             Dictionary<string, IFormLinkGetter<IPerkGetter>> perks = PerkArray
                 .Where(x =>
@@ -107,8 +109,10 @@ namespace KnowYourEnemyMutagen
             // Reading JSON and converting it to a normal list because .Contains() is weird in Newtonsoft.JSON
             JObject misc = JObject.Parse(File.ReadAllText(miscPath));
             JObject settings = JObject.Parse(File.ReadAllText(settingsPath));
+
             var effectIntensity = (float)settings["effect_intensity"]!;
             var patchSilverPerk = (bool)settings["patch_silver_perk"]!;
+
             Console.WriteLine("*** DETECTED SETTINGS ***");
             Console.WriteLine("patch_silver_perk: " + patchSilverPerk);
             Console.WriteLine("effect_intensity: " + effectIntensity);
@@ -124,52 +128,22 @@ namespace KnowYourEnemyMutagen
 
             Dictionary<string, string[]> creatureRules = JsonConvert.DeserializeObject<Dictionary<string, string[]>>(File.ReadAllText(creatureRulesPath));
 
-            // Part 1a
-            // Removing other magical resistance/weakness systems
-            foreach (var spell in state.LoadOrder.PriorityOrder.WinningOverrides<ISpellGetter>())
-            {
-                if (spell.EditorID == null || !abilitiesToClean.Contains(spell.EditorID)) continue;
-                var modifiedSpell = spell.DeepCopy();
-                bool spellModified = false;
-                foreach (var effect in modifiedSpell.Effects)
-                {
-                    effect.BaseEffect.TryResolve(state.LinkCache, out var baseEffect);
-                    if (baseEffect?.EditorID == null) continue;
-                    if (!resistancesAndWeaknesses.Contains(baseEffect.EditorID)) continue;
-                    if (effect.Data != null)
-                    {
-                        effect.Data.Magnitude = 0;
-                        spellModified = true;
-                    }
-                    else
-                        Console.WriteLine("Error setting Effect Magnitude - DATA was null!");
-                }
-                if (spellModified) state.PatchMod.Spells.Add(modifiedSpell);
-            }
+            // Part 1a && 1b
+            // Removing other magical resistance/weakness systems, remove other weapon resistance systems
+            Task magicResistances = RemoveMagicResistancesAsync(state, resistancesAndWeaknesses, abilitiesToClean);
 
             // Part 1b
             // Remove other weapon resistance systems
-            foreach (var perk in state.LoadOrder.PriorityOrder.WinningOverrides<IPerkGetter>())
-            {
-                if (perk.EditorID == null || !perksToClean.Contains(perk.EditorID)) continue;
-                foreach (var eff in perk.Effects)
-                {
-                    if (!(eff is PerkEntryPointModifyValue modValue)) continue;
-                    if (modValue.EntryPoint != APerkEntryPointEffect.EntryType.ModIncomingDamage) continue;
-                    modValue.Value = 1f;
-                    modValue.Modification = PerkEntryPointModifyValue.ModificationType.Set;
-                }
-            }
+            Task weaponResistances = RemoveWeaponResistancesAsync(state, perksToClean);
 
             // Part 2a
             // Adjust KYE's physical effects according to effect_intensity
             if (!effectIntensity.EqualsWithin(1))
             {
-                foreach (var perk in state.LoadOrder.PriorityOrder.WinningOverrides<IPerkGetter>())
+                foreach (var perk in state.LoadOrder.PriorityOrder.Perk().WinningOverrides())
                 {
                     bool perkModified = false;
                     if (perk.EditorID == null || !kyePerkNames.Contains(perk.EditorID) || !perk.Effects.Any()) continue;
-                    Console.WriteLine("Checking Perk " + perk.EditorID);
                     Perk perkCopy = perk.DeepCopy();
                     foreach (var eff in perkCopy.Effects)
                     {
@@ -183,13 +157,13 @@ namespace KnowYourEnemyMutagen
                         }
                         else continue;
                     }
-                    if (perkModified) state.PatchMod.Perks.Add(perkCopy);
+                    if (perkModified) state.PatchMod.Perks.Set(perkCopy);
                 }
 
                 // Part 2b
                 // Adjust KYE's magical effects according to effect_intensity
 
-                foreach (var spell in state.LoadOrder.PriorityOrder.WinningOverrides<ISpellGetter>())
+                foreach (var spell in state.LoadOrder.PriorityOrder.Spell().WinningOverrides())
                 {
                     if (spell.EditorID == null || !kyeAbilityNames.Contains(spell.EditorID)) continue;
                     Spell s = spell.DeepCopy();
@@ -226,7 +200,7 @@ namespace KnowYourEnemyMutagen
                             kyePerk.Effects.Add(eff);
                         }
 
-                        state.PatchMod.Perks.GetOrAddAsOverride(kyePerk);
+                        state.PatchMod.Perks.Set(kyePerk);
                     }
                 }
             }
@@ -274,7 +248,7 @@ namespace KnowYourEnemyMutagen
             // Part 5
             // Add the traits to NPCs
 
-            foreach (var npc in state.LoadOrder.PriorityOrder.WinningOverrides<INpcGetter>())
+            foreach (var npc in state.LoadOrder.PriorityOrder.Npc().WinningOverrides())
             {
                 // Skip if npc has spell list
                 if (npc.Configuration.TemplateFlags.HasFlag(NpcConfiguration.TemplateFlag.SpellList)) continue;
@@ -354,6 +328,46 @@ namespace KnowYourEnemyMutagen
                     }
                     */
                 }
+            }
+            await magicResistances;
+            await weaponResistances;
+            sw.Stop();
+            Console.WriteLine($"Patcher took {sw.ElapsedMilliseconds} to complete!");
+        }
+
+        private static async Task RemoveWeaponResistancesAsync(IPatcherState<ISkyrimMod, ISkyrimModGetter> state, List<string> perksToClean)
+        {
+            foreach (var perk in state.LoadOrder.PriorityOrder.Perk().WinningOverrides())
+            {
+                if (perk.EditorID == null || !perksToClean.Contains(perk.EditorID)) continue;
+                foreach (var eff in perk.Effects)
+                {
+                    if (!(eff is PerkEntryPointModifyValue modValue)) continue;
+                    if (modValue.EntryPoint != APerkEntryPointEffect.EntryType.ModIncomingDamage) continue;
+                    modValue.Value = 1f;
+                    modValue.Modification = PerkEntryPointModifyValue.ModificationType.Set;
+                }
+            }
+        }
+
+        private static async Task RemoveMagicResistancesAsync(IPatcherState<ISkyrimMod, ISkyrimModGetter> state, List<string> resistancesAndWeaknesses, List<string> abilitiesToClean)
+        {
+            foreach (var spell in state.LoadOrder.PriorityOrder.Spell().WinningOverrides())
+            {
+                if (spell.EditorID == null || !abilitiesToClean.Contains(spell.EditorID)) continue;
+                var modifiedSpell = spell.DeepCopy();
+                bool spellModified = false;
+                foreach (var effect in modifiedSpell.Effects)
+                {
+                    effect.BaseEffect.TryResolve(state.LinkCache, out var baseEffect);
+                    if (baseEffect?.EditorID == null) continue;
+                    if (!resistancesAndWeaknesses.Contains(baseEffect.EditorID)) continue;
+                    if (effect.Data == null || effect.Data.Magnitude == 0) continue;
+
+                    effect.Data.Magnitude = 0;
+                    spellModified = true;
+                }
+                if (spellModified) state.PatchMod.Spells.Set(modifiedSpell);
             }
         }
     }
