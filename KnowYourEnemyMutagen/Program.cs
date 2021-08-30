@@ -4,6 +4,7 @@ using System.Linq;
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Synthesis;
 using Mutagen.Bethesda.Skyrim;
+using Mutagen.Bethesda.Strings;
 using Newtonsoft.Json.Linq;
 using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Newtonsoft.Json;
@@ -146,7 +147,12 @@ namespace KnowYourEnemyMutagen
                     else
                         Console.WriteLine("Error setting Effect Magnitude - DATA was null!");
                 }
-                if (spellModified) state.PatchMod.Spells.Add(modifiedSpell);
+                if (spellModified) {
+                    if (modifiedSpell.Name != null && modifiedSpell.Name.TryLookup(Language.French, out string i18nSpellName)) {
+                        modifiedSpell.Name = i18nSpellName;
+                    }
+                    state.PatchMod.Spells.Add(modifiedSpell);
+				}
             }
 
             // Part 1b
@@ -193,6 +199,11 @@ namespace KnowYourEnemyMutagen
                 {
                     if (spell.EditorID == null || !kyeAbilityNames.Contains(spell.EditorID)) continue;
                     Spell s = spell.DeepCopy();
+					
+                    if (s.Name != null && s.Name.TryLookup(Language.French, out string i18nSpellName)) {
+                        s.Name = i18nSpellName;
+                    }
+
                     foreach (var eff in s.Effects)
                     {
                         eff.BaseEffect.TryResolve(state.LinkCache, out var baseEffect);
@@ -239,6 +250,11 @@ namespace KnowYourEnemyMutagen
                 if (KnowYourEnemy.Spell.kye_ab_ghostly.TryResolve(state.LinkCache, out var kyeAbGhostly))
                 {
                     Spell kyeAbGhostlyCaco = kyeAbGhostly.DeepCopy();
+					
+                    if (kyeAbGhostlyCaco.Name != null && kyeAbGhostlyCaco.Name.TryLookup(Language.French, out string i18nSpellName)) {
+                        kyeAbGhostlyCaco.Name = i18nSpellName;
+                    }
+                    
                     foreach (var eff in kyeAbGhostlyCaco.Effects)
                     {
                         if (eff.Data == null) continue;
@@ -256,6 +272,11 @@ namespace KnowYourEnemyMutagen
                 if (KnowYourEnemy.Spell.kye_ab_undead.TryResolve(state.LinkCache, out var kyeAbUndead))
                 {
                     Spell kyeAbUndeadCaco = kyeAbUndead.DeepCopy();
+					
+                    if (kyeAbUndeadCaco.Name != null && kyeAbUndeadCaco.Name.TryLookup(Language.French, out string i18nSpellName)) {
+                        kyeAbUndeadCaco.Name = i18nSpellName;
+                    }
+                    
                     foreach (var eff in kyeAbUndeadCaco.Effects)
                     {
                         if (eff.Data == null) continue;
@@ -329,6 +350,14 @@ namespace KnowYourEnemyMutagen
                 if (traits.Any())
                 {
                     Npc kyeNpc = state.PatchMod.Npcs.GetOrAddAsOverride(npc);
+					
+					if (kyeNpc.Name != null && kyeNpc.Name.TryLookup(Language.French, out string i18nNpcName)) {
+                        kyeNpc.Name = i18nNpcName;
+                    }
+                    if (kyeNpc.ShortName != null && kyeNpc.ShortName.TryLookup(Language.French, out string i18nNpcShortName)) {
+                        kyeNpc.ShortName = i18nNpcShortName;
+                    }
+					
                     if (kyeNpc.Perks == null)
                         kyeNpc.Perks = new ExtendedList<PerkPlacement>();
                     foreach (string trait in traits)
