@@ -2,7 +2,7 @@
 {
     public class Settings
     {
-        public float EffectIntensity { get; set; } = 1.0f;
-        public bool PatchSilverPerk { get; set; } = false;
+        public float IntensiteDeLEffet { get; set; } = 1.0f;
+        public bool ModifierLAtoutArgent { get; set; } = false;
     }
 }
