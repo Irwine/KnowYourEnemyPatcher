@@ -110,11 +110,11 @@ namespace KnowYourEnemyMutagen
             // Reading JSON and converting it to a normal list because .Contains() is weird in Newtonsoft.JSON
             JObject misc = JObject.Parse(File.ReadAllText(miscPath));
             //JObject settings = JObject.Parse(File.ReadAllText(settingsPath));
-            var IntensiteDeLEffet = _settings.Value.IntensiteDeLEffet;
-            var ModifierLAtoutArgent = _settings.Value.ModifierLAtoutArgent;
+            var EffectIntensity = _settings.Value.EffectIntensity;
+            var PatchSilverPerk = _settings.Value.PatchSilverPerk;
             Console.WriteLine("*** DETECTED SETTINGS ***");
-            Console.WriteLine("patch_silver_perk: " + ModifierLAtoutArgent);
-            Console.WriteLine("effect_intensity: " + IntensiteDeLEffet);
+            Console.WriteLine("patch_silver_perk: " + PatchSilverPerk);
+            Console.WriteLine("effect_intensity: " + EffectIntensity);
             Console.WriteLine("Light and Shadow detected: " + state.LoadOrder.ContainsKey(LightAndShadow.ModKey));
             Console.WriteLine("Know Your Elements detected: " + state.LoadOrder.ContainsKey(KnowYourElements.ModKey));
             Console.WriteLine("*************************");
@@ -171,7 +171,7 @@ namespace KnowYourEnemyMutagen
 
             // Part 2a
             // Adjust KYE's physical effects according to effect_intensity
-            if (!IntensiteDeLEffet.EqualsWithin(1))
+            if (!EffectIntensity.EqualsWithin(1))
             {
                 foreach (var perk in state.LoadOrder.PriorityOrder.WinningOverrides<IPerkGetter>())
                 {
@@ -184,7 +184,7 @@ namespace KnowYourEnemyMutagen
                         if (modValue.EntryPoint == APerkEntryPointEffect.EntryType.ModIncomingDamage || modValue.EntryPoint == APerkEntryPointEffect.EntryType.ModAttackDamage)
                         {
                             var currentMagnitude = modValue.Value ?? 0;
-                            modValue.Value = AdjustDamageMod(currentMagnitude, IntensiteDeLEffet);
+                            modValue.Value = AdjustDamageMod(currentMagnitude, EffectIntensity);
                             modValue.Modification = PerkEntryPointModifyValue.ModificationType.Multiply;
                             perkModified = true;
                         }
@@ -211,7 +211,7 @@ namespace KnowYourEnemyMutagen
                             || !resistancesAndWeaknesses.Contains(baseEffect.EditorID)
                             || eff.Data == null) continue;
                         var currentMagnitude = eff.Data.Magnitude;
-                        eff.Data.Magnitude = AdjustMagicResist(currentMagnitude, IntensiteDeLEffet);
+                        eff.Data.Magnitude = AdjustMagicResist(currentMagnitude, EffectIntensity);
                         state.PatchMod.Spells.Set(s);
                     }
                 }
@@ -220,7 +220,7 @@ namespace KnowYourEnemyMutagen
             // Part 3
             // Edit the effect of silver weapons
 
-            if (ModifierLAtoutArgent)
+            if (PatchSilverPerk)
             {
                 if (state.LoadOrder.ContainsKey(ModKey.FromNameAndExtension("Skyrim Immersive Creatures.esp")))
                     Console.WriteLine("WARNING: Silver Perk is being patched, but Skyrim Immersive Creatures has been detected in your load order. Know Your Enemy's silver weapon effects will NOT work against new races added by SIC.");
