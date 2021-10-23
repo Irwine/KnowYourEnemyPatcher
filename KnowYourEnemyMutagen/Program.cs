@@ -151,7 +151,7 @@ namespace KnowYourEnemyMutagen
                     if (modifiedSpell.Name != null && modifiedSpell.Name.TryLookup(Language.French, out string i18nSpellName)) {
                         modifiedSpell.Name = i18nSpellName;
                     }
-                    state.PatchMod.Spells.Add(modifiedSpell);
+                    state.PatchMod.Spells.Set(modifiedSpell);
 				}
             }
 
@@ -189,7 +189,7 @@ namespace KnowYourEnemyMutagen
                             perkModified = true;
                         }
                     }
-                    if (perkModified) state.PatchMod.Perks.Add(perkCopy);
+                    if (perkModified) state.PatchMod.Perks.Set(perkCopy);
                 }
 
                 // Part 2b
